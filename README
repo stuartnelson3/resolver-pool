@@ -1,0 +1,6 @@
+resolver_pool
+=============
+
+Maintains and refreshes a resolved list of endpoints for use with a service.
+For example, if you use Consul for service discovery, resolver_pool can be used
+to maintain a list of healthy endpoints for your service to communicate with.

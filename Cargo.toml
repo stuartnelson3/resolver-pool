@@ -1,0 +1,6 @@
+[package]
+name = "resolver_pool"
+version = "0.1.0"
+authors = ["stuart nelson <stuartnelson3@gmail.com>"]
+
+[dependencies]
