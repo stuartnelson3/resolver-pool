@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["stuart nelson <stuartnelson3@gmail.com>"]
 
 [dependencies]
+crossbeam = "^0.4"
