@@ -51,6 +51,14 @@ where
         }
     }
 
+    pub fn get(&mut self) -> Option<SocketAddr> {
+        let addr = self.cache.try_pop();
+        if let Some(addr) = addr {
+            self.cache.push(addr);
+        }
+        addr
+    }
+
     pub fn run<'a>(&mut self, key: &'a str) -> Result<(), Error> {
         match self.state {
             State::Running => return Err(Error("already running".to_owned())),
