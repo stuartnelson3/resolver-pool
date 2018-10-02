@@ -111,7 +111,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Error, Resolver, ResolverPool};
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::net::SocketAddr;
     use std::time::Duration;
 
     struct DummyResolver(i8);
@@ -122,12 +122,18 @@ mod tests {
     }
     impl Resolver for DummyResolver {
         fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
-            Ok(vec!["127.0.0.1:8080".parse().unwrap()])
+            let mut addrs = vec![];
+            for n in 0..self.0 {
+                let addr = format!("127.0.0.1:808{}", n).parse().unwrap();
+                addrs.push(addr);
+            }
+            Ok(addrs)
         }
     }
     #[test]
     fn it_works() {
-        let resolver = DummyResolver::new(5);
+        let n = 5;
+        let resolver = DummyResolver::new(n);
         let duration = Duration::new(5, 0); // 5 seconds
         let mut resolver_pool = ResolverPool::new(resolver, duration);
         assert_eq!(resolver_pool.run().is_ok(), true);
@@ -135,5 +141,9 @@ mod tests {
         assert_eq!(addr.is_some(), true);
         let addr = addr.unwrap();
         assert_eq!(addr, "127.0.0.1:8080".parse().unwrap());
+        for _n in 0..n * 2 {
+            let addr = resolver_pool.get();
+            assert_eq!(addr.is_some(), true);
+        }
     }
 }
