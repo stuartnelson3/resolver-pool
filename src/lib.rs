@@ -90,10 +90,11 @@ where
                                 cache.pop();
                             }
                             for addr in addrs {
+                                println!("adding addr {}", addr);
                                 cache.push(addr);
                             }
                         }
-                        Err(err) => print!("failed to refresh: {:?}", err),
+                        Err(err) => println!("failed to refresh: {:?}", err),
                     }
                 },
                 recv(r) => return
