@@ -109,8 +109,30 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::{Error, Resolver, ResolverPool};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::time::Duration;
+
+    struct DummyResolver(i8);
+    impl DummyResolver {
+        fn new(n: i8) -> Self {
+            DummyResolver(n)
+        }
+    }
+    impl Resolver for DummyResolver {
+        fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
+            Ok(vec!["127.0.0.1:8080".parse().unwrap()])
+        }
+    }
     #[test]
     fn it_works() {
-        assert_eq!(2 + 2, 4);
+        let resolver = DummyResolver::new(5);
+        let duration = Duration::new(5, 0); // 5 seconds
+        let mut resolver_pool = ResolverPool::new(resolver, duration);
+        assert_eq!(resolver_pool.run().is_ok(), true);
+        let addr = resolver_pool.get();
+        assert_eq!(addr.is_some(), true);
+        let addr = addr.unwrap();
+        assert_eq!(addr, "127.0.0.1:8080".parse().unwrap());
     }
 }
