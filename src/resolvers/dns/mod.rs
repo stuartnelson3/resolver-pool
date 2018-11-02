@@ -18,7 +18,7 @@ impl<T> TrustDNS<T>
 where
     T: Client,
 {
-    fn new(client: T, lookup: &'static str) -> Self {
+    pub fn new(client: T, lookup: &'static str) -> Self {
         TrustDNS { client, lookup }
     }
 }

@@ -1,1 +1,1 @@
-mod dns;
+pub mod dns;
