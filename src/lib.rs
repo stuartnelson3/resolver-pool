@@ -10,6 +10,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+pub mod resolvers;
+
 pub trait Resolver {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error>;
 }

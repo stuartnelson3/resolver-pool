@@ -5,3 +5,5 @@ authors = ["stuart nelson <stuartnelson3@gmail.com>"]
 
 [dependencies]
 crossbeam = "^0.4"
+trust-dns = "^0.15"
+
