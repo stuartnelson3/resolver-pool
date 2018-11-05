@@ -12,30 +12,30 @@ pub struct TrustDNS<T> {
     client: T,
     lookup: &'static str,
 }
-// Make a generic ResolveStruct that can take a closure which returns the result of resolve().
 
 impl<T> TrustDNS<T>
 where
     T: Client,
 {
+    // TODO: Inject Prometheus registry.
     pub fn new(client: T, lookup: &'static str) -> Self {
         TrustDNS { client, lookup }
     }
 }
 
-impl<T> Resolver for TrustDNS<T>
+impl<T> Resolver<SocketAddr> for TrustDNS<T>
 where
     T: Client,
 {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
-        let name = Name::from_str(self.lookup).unwrap();
+        let name = Name::from_str(self.lookup).expect("failed to create name");
         // .map_err(|err| Err(Error("TODO: Map error".to_string())))?;
 
         let response: DnsResponse = self
             .client
             .query(&name, DNSClass::IN, RecordType::SRV)
-            .unwrap(); // Make record type configurable?
-                       // .map_err(|err| Err(Error("TODO: Map error".to_string())))?;
+            .expect("failed to query client"); // Make record type configurable?
+                                               // .map_err(|err| Err(Error("TODO: Map error".to_string())))?;
 
         let answers: &[Record] = response.answers();
 
