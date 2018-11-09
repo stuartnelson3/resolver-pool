@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate crossbeam;
+#[macro_use]
+extern crate log;
+extern crate rayon;
 
 use crossbeam::channel;
 use crossbeam::queue::MsQueue;
@@ -64,7 +67,10 @@ where
 
     pub fn run(&mut self) -> Result<(), Error> {
         match self.state {
-            State::Running => return Err(Error("already running".to_owned())),
+            State::Running => {
+                error!("resolver pool already running");
+                return Err(Error("resolver pool already running".to_owned()));
+            }
             State::Initialized => {}
         };
         self.state = State::Running;
@@ -88,17 +94,18 @@ where
                     match resolver.resolve() {
                         Ok(addrs) => {
                             if addrs.is_empty() {
+                                debug!("no addrs returned by resolver");
                                 continue
                             }
                             while !cache.is_empty() {
                                 cache.pop();
                             }
                             for addr in addrs {
-                                println!("adding addr {}", addr);
+                                debug!("adding addr {}", addr);
                                 cache.push(addr);
                             }
                         }
-                        Err(err) => println!("failed to refresh: {:?}", err),
+                        Err(err) => error!("failed to refresh: {:?}", err),
                     }
                 },
                 recv(r) => return
