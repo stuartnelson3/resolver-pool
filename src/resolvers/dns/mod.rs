@@ -1,5 +1,6 @@
 extern crate trust_dns;
 
+use rayon::prelude::*;
 use resolvers::dns::trust_dns::client::Client;
 use resolvers::dns::trust_dns::client::SyncClient;
 use resolvers::dns::trust_dns::op::DnsResponse;
@@ -56,7 +57,7 @@ impl Resolver<SocketAddr> for TrustDNS {
 
         let srv_records = response
             .answers()
-            .iter()
+            .par_iter()
             .map(|a| a.rdata())
             .filter_map(|srv| match srv {
                 &RData::SRV(ref srv) => {
@@ -84,7 +85,7 @@ impl Resolver<SocketAddr> for TrustDNS {
                     }
                 }
                 _ => {
-                    error!("rdata did not contain an A type record: {:?}", srv.rdata());
+                    error!("rdata did not contain an SRV record type");
                     None
                 }
             }).collect();
