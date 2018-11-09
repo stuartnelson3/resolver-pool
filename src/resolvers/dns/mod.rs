@@ -19,6 +19,7 @@ pub struct TrustDNS {
 
 impl TrustDNS {
     // TODO: Inject Prometheus registry.
+    // TODO: Support multiple nameservers
     pub fn new(name_server: SocketAddr, lookup: &'static str) -> Self {
         let udp_client = SyncClient::new(UdpClientConnection::new(name_server).unwrap());
         let tcp_client = SyncClient::new(TcpClientConnection::new(name_server).unwrap());
@@ -73,7 +74,10 @@ impl Resolver<SocketAddr> for TrustDNS {
                     if let &RData::A(ip) = answer.rdata() {
                         Some(SocketAddr::new(IpAddr::V4(ip), srv.port()))
                     } else {
-                        // Log failure.
+                        error!(
+                            "rdata did not contain an A type record: {:?}",
+                            answer.rdata()
+                        );
                         None
                     }
                 }
