@@ -33,20 +33,25 @@ impl TrustDNS {
 
 impl Resolver<SocketAddr> for TrustDNS {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
-        let name = Name::from_str(self.lookup).expect("failed to create name");
-        // .map_err(|err| Err(Error("TODO: Map error".to_string())))?;
+        let name = Name::from_str(self.lookup).map_err(|err| Error(err.to_string()))?;
 
-        let mut response: DnsResponse = self
-            .udp_client
-            .query(&name, DNSClass::IN, RecordType::SRV)
-            .expect("failed to query client");
-        // .map_err(|err| Err(Error("TODO: Map error".to_string())))?;
+        let mut response: DnsResponse =
+            match self.udp_client.query(&name, DNSClass::IN, RecordType::SRV) {
+                Ok(response) => response,
+                Err(err) => {
+                    error!("{}", err.to_string());
+                    return Err(Error(err.to_string()));
+                }
+            };
 
         if response.truncated() {
-            response = self
-                .tcp_client
-                .query(&name, DNSClass::IN, RecordType::SRV)
-                .expect("failed to query client");
+            response = match self.tcp_client.query(&name, DNSClass::IN, RecordType::SRV) {
+                Ok(response) => response,
+                Err(err) => {
+                    error!("{}", err.to_string());
+                    return Err(Error(err.to_string()));
+                }
+            };
         }
 
         let srv_records = response
@@ -59,8 +64,6 @@ impl Resolver<SocketAddr> for TrustDNS {
                         .udp_client
                         .query(&srv.target(), DNSClass::IN, RecordType::A)
                         .ok()?;
-                    // Log failure
-                    // .expect("A record lookup failed");
 
                     if response.truncated() {
                         response = self
@@ -70,7 +73,6 @@ impl Resolver<SocketAddr> for TrustDNS {
                     }
 
                     let answer: &Record = response.answers().first()?;
-                    // Log failure
                     if let &RData::A(ip) = answer.rdata() {
                         Some(SocketAddr::new(IpAddr::V4(ip), srv.port()))
                     } else {
@@ -81,7 +83,10 @@ impl Resolver<SocketAddr> for TrustDNS {
                         None
                     }
                 }
-                _ => None,
+                _ => {
+                    error!("rdata did not contain an A type record: {:?}", srv.rdata());
+                    None
+                }
             }).collect();
         Ok(srv_records)
     }
