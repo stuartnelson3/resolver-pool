@@ -12,41 +12,54 @@ use std::str::FromStr;
 use Error;
 use Resolver;
 
-pub struct TrustDNS {
-    pub udp_client: SyncClient<UdpClientConnection>,
-    pub tcp_client: SyncClient<TcpClientConnection>,
-    pub lookup: &'static str,
+pub struct ParallelResolver {
+    pub clients: Vec<TrustDNS>,
 }
 
-impl TrustDNS {
+impl ParallelResolver {
     // TODO: Inject Prometheus registry.
-    // TODO: Support multiple nameservers
-    pub fn new(name_server: SocketAddr, lookup: &'static str) -> Self {
-        let udp_client = SyncClient::new(UdpClientConnection::new(name_server).unwrap());
-        let tcp_client = SyncClient::new(TcpClientConnection::new(name_server).unwrap());
-        TrustDNS {
-            udp_client,
-            tcp_client,
-            lookup,
-        }
+    pub fn new(nameservers: Vec<SocketAddr>, lookup: &'static str) -> Self {
+        let clients = nameservers
+            .into_iter()
+            .map(|ns| TrustDNS {
+                udp: SyncClient::new(UdpClientConnection::new(ns).unwrap()),
+                tcp: SyncClient::new(TcpClientConnection::new(ns).unwrap()),
+                lookup: lookup,
+            }).collect();
+        ParallelResolver { clients }
     }
+}
+
+impl Resolver<SocketAddr> for ParallelResolver {
+    fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
+        self.clients
+            .par_iter()
+            .map(|client| client.resolve())
+            .find_any(|res| res.is_ok())
+            .unwrap_or(Err(Error("request failed".to_string())))
+    }
+}
+
+pub struct TrustDNS {
+    pub udp: SyncClient<UdpClientConnection>,
+    pub tcp: SyncClient<TcpClientConnection>,
+    pub lookup: &'static str,
 }
 
 impl Resolver<SocketAddr> for TrustDNS {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
         let name = Name::from_str(self.lookup).map_err(|err| Error(err.to_string()))?;
 
-        let mut response: DnsResponse =
-            match self.udp_client.query(&name, DNSClass::IN, RecordType::SRV) {
-                Ok(response) => response,
-                Err(err) => {
-                    error!("{}", err.to_string());
-                    return Err(Error(err.to_string()));
-                }
-            };
+        let mut response: DnsResponse = match self.udp.query(&name, DNSClass::IN, RecordType::SRV) {
+            Ok(response) => response,
+            Err(err) => {
+                error!("{}", err.to_string());
+                return Err(Error(err.to_string()));
+            }
+        };
 
         if response.truncated() {
-            response = match self.tcp_client.query(&name, DNSClass::IN, RecordType::SRV) {
+            response = match self.tcp.query(&name, DNSClass::IN, RecordType::SRV) {
                 Ok(response) => response,
                 Err(err) => {
                     error!("{}", err.to_string());
@@ -62,13 +75,13 @@ impl Resolver<SocketAddr> for TrustDNS {
             .filter_map(|srv| match srv {
                 &RData::SRV(ref srv) => {
                     let mut response: DnsResponse = self
-                        .udp_client
+                        .udp
                         .query(&srv.target(), DNSClass::IN, RecordType::A)
                         .ok()?;
 
                     if response.truncated() {
                         response = self
-                            .udp_client
+                            .tcp
                             .query(&srv.target(), DNSClass::IN, RecordType::A)
                             .ok()?;
                     }

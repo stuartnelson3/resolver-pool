@@ -11,10 +11,10 @@ use std::time::Duration;
 
 pub fn main() {
     env_logger::init();
-    let address = "0.0.0.0:1053".parse().unwrap();
+    let addresses = vec!["0.0.0.0:1053".parse().unwrap()];
 
-    let srv_record = "_proto._service.example.com";
-    let resolver = dns::TrustDNS::new(address, srv_record);
+    let srv_record = "_proto._service.example.com.";
+    let resolver = dns::ParallelResolver::new(addresses, srv_record);
 
     let micro_second = 1 * 1000;
     let milli_second = micro_second * 1000;
