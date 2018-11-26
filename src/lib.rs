@@ -60,11 +60,15 @@ where
         }
     }
 
-    pub fn get(&mut self) -> SocketAddr {
+    pub fn get(&mut self) -> Option<SocketAddr> {
         let offset = self.offset.load(Ordering::Relaxed);
         self.offset.store(offset + 1, Ordering::Relaxed);
         let cache = self.cache.lock().unwrap();
-        cache[offset % cache.len()]
+        let len = cache.len();
+        if len == 0 {
+            return None;
+        }
+        Some(cache[offset % len])
     }
 
     pub fn run(&mut self) -> Result<(), Error> {
@@ -89,7 +93,11 @@ where
                 recv(refreshc) => {
                     match resolver.resolve() {
                         Ok(addrs) => {
-                            *cache.lock().unwrap() = addrs;
+                            if addrs.len() > 0 {
+                                *cache.lock().unwrap() = addrs;
+                            } else {
+                                debug!("no addrs returned from resolvers");
+                            }
                         }
                         Err(err) => error!("failed to refresh: {:?}", err),
                     }
@@ -134,7 +142,7 @@ mod tests {
         let duration = Duration::new(5, 0); // 5 seconds
         let mut resolver_pool = ResolverPool::new(resolver, duration);
         assert_eq!(resolver_pool.run().is_ok(), true);
-        let addr = resolver_pool.get();
+        let addr = resolver_pool.get().unwrap();
         assert_eq!(addr, "127.0.0.1:8080".parse().unwrap());
     }
 }
