@@ -30,7 +30,7 @@ impl ParallelResolver {
     }
 }
 
-impl Resolver<SocketAddr> for ParallelResolver {
+impl Resolver for ParallelResolver {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
         self.clients
             .par_iter()
@@ -46,7 +46,7 @@ pub struct TrustDNS {
     pub lookup: &'static str,
 }
 
-impl Resolver<SocketAddr> for TrustDNS {
+impl Resolver for TrustDNS {
     fn resolve(&self) -> Result<Vec<SocketAddr>, Error> {
         let name = Name::from_str(self.lookup).map_err(|err| Error(err.to_string()))?;
 

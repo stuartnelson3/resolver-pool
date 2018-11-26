@@ -8,6 +8,7 @@ use crossbeam::channel;
 use crossbeam::queue::MsQueue;
 use std::fmt::Display;
 use std::marker::{Send, Sync};
+use std::net::SocketAddr;
 use std::string::String;
 use std::sync::Arc;
 use std::thread;
@@ -15,14 +16,14 @@ use std::time::Duration;
 
 pub mod resolvers;
 
-pub trait Resolver<T> {
-    fn resolve(&self) -> Result<Vec<T>, Error>;
+pub trait Resolver {
+    fn resolve(&self) -> Result<Vec<SocketAddr>, Error>;
 }
 
 #[derive(Debug)]
 pub struct Error(String);
 
-pub struct ResolverPool<R, T> {
+pub struct ResolverPool<R> {
     resolver: Arc<R>,
     // Refresh interval in seconds.
     refresh_interval: Duration,
@@ -34,7 +35,7 @@ pub struct ResolverPool<R, T> {
     // "timeout" for bad SocketAddr's, and re-try them after a configurable timeout. e.g., the last
     // X connections have failed, or the avg latency for the last Y connections is above a
     // threshold, put it into a future that will add it back to the queue after Z milliseconds.
-    cache: Arc<MsQueue<T>>,
+    cache: Arc<MsQueue<SocketAddr>>,
 }
 
 enum State {
@@ -42,10 +43,9 @@ enum State {
     Running,
 }
 
-impl<R, T> ResolverPool<R, T>
+impl<R> ResolverPool<R>
 where
-    R: 'static + Resolver<T> + Send + Sync,
-    T: 'static + Display + Send + Copy,
+    R: 'static + Resolver + Send + Sync,
 {
     // TODO: Inject Prometheus registry.
     pub fn new(resolver: R, refresh_interval: Duration) -> Self {
@@ -59,7 +59,7 @@ where
         }
     }
 
-    pub fn get(&mut self) -> Option<T> {
+    pub fn get(&mut self) -> Option<SocketAddr> {
         let addr = self.cache.try_pop()?;
         self.cache.push(addr);
         Some(addr)
