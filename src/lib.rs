@@ -5,12 +5,11 @@ extern crate log;
 extern crate rayon;
 
 use crossbeam::channel;
-use crossbeam::queue::MsQueue;
-use std::fmt::Display;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
 use std::string::String;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -35,7 +34,8 @@ pub struct ResolverPool<R> {
     // "timeout" for bad SocketAddr's, and re-try them after a configurable timeout. e.g., the last
     // X connections have failed, or the avg latency for the last Y connections is above a
     // threshold, put it into a future that will add it back to the queue after Z milliseconds.
-    cache: Arc<MsQueue<SocketAddr>>,
+    cache: Arc<Mutex<Vec<SocketAddr>>>,
+    offset: AtomicUsize,
 }
 
 enum State {
@@ -55,14 +55,16 @@ where
             refresh_interval: refresh_interval,
             state: State::Initialized,
             stopc: stopc,
-            cache: Arc::new(MsQueue::new()),
+            cache: Arc::new(Mutex::new(vec![])),
+            offset: AtomicUsize::new(0),
         }
     }
 
-    pub fn get(&mut self) -> Option<SocketAddr> {
-        let addr = self.cache.try_pop()?;
-        self.cache.push(addr);
-        Some(addr)
+    pub fn get(&mut self) -> SocketAddr {
+        let offset = self.offset.load(Ordering::Relaxed);
+        self.offset.store(offset + 1, Ordering::Relaxed);
+        let cache = self.cache.lock().unwrap();
+        cache[offset % cache.len()]
     }
 
     pub fn run(&mut self) -> Result<(), Error> {
@@ -75,13 +77,7 @@ where
         };
         self.state = State::Running;
 
-        while !self.cache.is_empty() {
-            self.cache.pop();
-        }
-
-        for addr in self.resolver.resolve()? {
-            self.cache.push(addr);
-        }
+        *self.cache.lock().unwrap() = self.resolver.resolve()?;
 
         let (stopc, r) = channel::bounded(0);
         self.stopc = stopc;
@@ -93,17 +89,7 @@ where
                 recv(refreshc) => {
                     match resolver.resolve() {
                         Ok(addrs) => {
-                            if addrs.is_empty() {
-                                debug!("no addrs returned by resolver");
-                                continue
-                            }
-                            while !cache.is_empty() {
-                                cache.pop();
-                            }
-                            for addr in addrs {
-                                debug!("adding addr {}", addr);
-                                cache.push(addr);
-                            }
+                            *cache.lock().unwrap() = addrs;
                         }
                         Err(err) => error!("failed to refresh: {:?}", err),
                     }
@@ -149,12 +135,6 @@ mod tests {
         let mut resolver_pool = ResolverPool::new(resolver, duration);
         assert_eq!(resolver_pool.run().is_ok(), true);
         let addr = resolver_pool.get();
-        assert_eq!(addr.is_some(), true);
-        let addr = addr.unwrap();
         assert_eq!(addr, "127.0.0.1:8080".parse().unwrap());
-        for _n in 0..n * 2 {
-            let addr = resolver_pool.get();
-            assert_eq!(addr.is_some(), true);
-        }
     }
 }
