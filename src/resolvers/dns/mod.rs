@@ -35,8 +35,10 @@ impl Resolver for ParallelResolver {
         self.clients
             .par_iter()
             .map(|client| client.resolve())
-            .find_any(|res| res.is_ok())
-            .unwrap_or(Err(Error("request failed".to_string())))
+            .find_any(|res| match res {
+                Ok(addrs) => addrs.len() > 0,
+                Err(_) => false,
+            }).unwrap_or(Err(Error("request failed".to_string())))
     }
 }
 
